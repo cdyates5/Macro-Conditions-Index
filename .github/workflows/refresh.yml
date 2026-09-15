@@ -1,0 +1,45 @@
+name: Refresh dashboard
+
+on:
+  schedule:
+    # 07:10 UTC, Tue-Sat. Catches the prior US session close, and the
+    # ISM release (1st business day, 10:00 ET) lands in the next run.
+    - cron: "10 7 * * 2-6"
+  workflow_dispatch:        # lets you run it by hand from the Actions tab
+
+permissions:
+  contents: write           # required to commit the refreshed index.html
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Refresh index
+        run: python refresh.py
+
+      - name: Commit if data changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html data/ism.csv
+          if git diff --staged --quiet; then
+            echo "No data change - nothing to commit."
+          else
+            git commit -m "Auto-refresh: $(date -u +'%Y-%m-%d')"
+            git push
+          fi
